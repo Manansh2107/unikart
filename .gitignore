@@ -1,0 +1,8 @@
+target/
+.idea/
+.vscode/
+*.iml
+
+# Local database credentials
+src/main/resources/db.properties
+.env
