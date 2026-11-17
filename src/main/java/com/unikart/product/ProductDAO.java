@@ -12,7 +12,7 @@ import java.util.List;
 
 public class ProductDAO {
 
-    // Fetch all products
+    // Fetch all products (for admin use)
     public List<Product> getAllProducts() {
 
         List<Product> products = new ArrayList<>();
@@ -24,25 +24,7 @@ public class ProductDAO {
                 ResultSet result = statement.executeQuery()) {
 
             while (result.next()) {
-
-                Product product = new Product();
-
-                product.setProductId(result.getInt("product_id"));
-
-                int sellerId = result.getInt("seller_id");
-                product.setSellerId(
-                        result.wasNull() ? null : sellerId);
-
-                product.setCategoryId(result.getInt("category_id"));
-                product.setProductName(result.getString("product_name"));
-                product.setDescription(result.getString("description"));
-                product.setPrice(result.getBigDecimal("price"));
-                product.setStock(result.getInt("stock"));
-                product.setStatus(result.getString("status"));
-                product.setRejectionReason(result.getString("rejection_reason"));
-                product.setCreatedAt(result.getTimestamp("created_at"));
-
-                products.add(product);
+                products.add(mapProduct(result));
             }
 
         } catch (Exception e) {
@@ -94,26 +76,8 @@ public class ProductDAO {
             try (ResultSet result = statement.executeQuery()) {
 
                 if (result.next()) {
-
-                    Product product = new Product();
-
-                    product.setProductId(result.getInt("product_id"));
-
-                    int sellerId = result.getInt("seller_id");
-                    product.setSellerId(result.wasNull() ? null : sellerId);
-
-                    product.setCategoryId(result.getInt("category_id"));
-                    product.setProductName(result.getString("product_name"));
-                    product.setDescription(result.getString("description"));
-                    product.setPrice(result.getBigDecimal("price"));
-                    product.setStock(result.getInt("stock"));
-                    product.setStatus(result.getString("status"));
-                    product.setRejectionReason(result.getString("rejection_reason"));
-                    product.setCreatedAt(result.getTimestamp("created_at"));
-
-                    return product;
+                    return mapProduct(result);
                 }
-
             }
 
         } catch (Exception e) {
@@ -123,16 +87,30 @@ public class ProductDAO {
         return null;
     }
 
-    // Update an existing product
-    public boolean updateProduct(Product product) {
+    // Update an existing product.
+    // Material changes send the product back for admin approval.
+    // Stock-only changes do not affect approval status.
+    public boolean updateProduct(Product product, int sellerId) {
 
         String sql = "UPDATE products SET "
+                + "status = CASE "
+                + "WHEN NOT (category_id <=> ?) "
+                + "OR NOT (product_name <=> ?) "
+                + "OR NOT (description <=> ?) "
+                + "OR NOT (price <=> ?) "
+                + "THEN 'PENDING' ELSE status END, "
+                + "rejection_reason = CASE "
+                + "WHEN NOT (category_id <=> ?) "
+                + "OR NOT (product_name <=> ?) "
+                + "OR NOT (description <=> ?) "
+                + "OR NOT (price <=> ?) "
+                + "THEN NULL ELSE rejection_reason END, "
                 + "category_id = ?, "
                 + "product_name = ?, "
                 + "description = ?, "
                 + "price = ?, "
                 + "stock = ? "
-                + "WHERE product_id = ?";
+                + "WHERE product_id = ? AND seller_id = ?";
 
         try (Connection connection = DBConnection.getConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -141,8 +119,20 @@ public class ProductDAO {
             statement.setString(2, product.getProductName());
             statement.setString(3, product.getDescription());
             statement.setBigDecimal(4, product.getPrice());
-            statement.setInt(5, product.getStock());
-            statement.setInt(6, product.getProductId());
+
+            statement.setInt(5, product.getCategoryId());
+            statement.setString(6, product.getProductName());
+            statement.setString(7, product.getDescription());
+            statement.setBigDecimal(8, product.getPrice());
+
+            statement.setInt(9, product.getCategoryId());
+            statement.setString(10, product.getProductName());
+            statement.setString(11, product.getDescription());
+            statement.setBigDecimal(12, product.getPrice());
+            statement.setInt(13, product.getStock());
+
+            statement.setInt(14, product.getProductId());
+            statement.setInt(15, sellerId);
 
             return statement.executeUpdate() > 0;
 
@@ -151,15 +141,17 @@ public class ProductDAO {
         }
     }
 
-    // Delete a product using its ID
-    public boolean deleteProduct(int productId) {
+    // Delete a product belonging to a particular seller
+    public boolean deleteProduct(int productId, int sellerId) {
 
-        String sql = "DELETE FROM products WHERE product_id = ?";
+        String sql = "DELETE FROM products "
+                + "WHERE product_id = ? AND seller_id = ?";
 
         try (Connection connection = DBConnection.getConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
 
             statement.setInt(1, productId);
+            statement.setInt(2, sellerId);
 
             return statement.executeUpdate() > 0;
 
@@ -168,11 +160,12 @@ public class ProductDAO {
         }
     }
 
-    // Approve a product
+    // Approve a product only if it is pending
     public boolean approveProduct(int productId) {
 
         String sql = "UPDATE products SET status = 'APPROVED', "
-                + "rejection_reason = NULL WHERE product_id = ?";
+                + "rejection_reason = NULL "
+                + "WHERE product_id = ? AND status = 'PENDING'";
 
         try (Connection connection = DBConnection.getConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -186,11 +179,12 @@ public class ProductDAO {
         }
     }
 
-    // Reject a product with a reason
+    // Reject a product only if it is pending
     public boolean rejectProduct(int productId, String reason) {
 
         String sql = "UPDATE products SET status = 'REJECTED', "
-                + "rejection_reason = ? WHERE product_id = ?";
+                + "rejection_reason = ? "
+                + "WHERE product_id = ? AND status = 'PENDING'";
 
         try (Connection connection = DBConnection.getConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -219,24 +213,7 @@ public class ProductDAO {
                 ResultSet result = statement.executeQuery()) {
 
             while (result.next()) {
-
-                Product product = new Product();
-
-                product.setProductId(result.getInt("product_id"));
-
-                int sellerId = result.getInt("seller_id");
-                product.setSellerId(result.wasNull() ? null : sellerId);
-
-                product.setCategoryId(result.getInt("category_id"));
-                product.setProductName(result.getString("product_name"));
-                product.setDescription(result.getString("description"));
-                product.setPrice(result.getBigDecimal("price"));
-                product.setStock(result.getInt("stock"));
-                product.setStatus(result.getString("status"));
-                product.setRejectionReason(result.getString("rejection_reason"));
-                product.setCreatedAt(result.getTimestamp("created_at"));
-
-                products.add(product);
+                products.add(mapProduct(result));
             }
 
         } catch (Exception e) {
@@ -260,24 +237,7 @@ public class ProductDAO {
                 ResultSet result = statement.executeQuery()) {
 
             while (result.next()) {
-
-                Product product = new Product();
-
-                product.setProductId(result.getInt("product_id"));
-
-                int sellerId = result.getInt("seller_id");
-                product.setSellerId(result.wasNull() ? null : sellerId);
-
-                product.setCategoryId(result.getInt("category_id"));
-                product.setProductName(result.getString("product_name"));
-                product.setDescription(result.getString("description"));
-                product.setPrice(result.getBigDecimal("price"));
-                product.setStock(result.getInt("stock"));
-                product.setStatus(result.getString("status"));
-                product.setRejectionReason(result.getString("rejection_reason"));
-                product.setCreatedAt(result.getTimestamp("created_at"));
-
-                products.add(product);
+                products.add(mapProduct(result));
             }
 
         } catch (Exception e) {
@@ -301,24 +261,7 @@ public class ProductDAO {
                 ResultSet result = statement.executeQuery()) {
 
             while (result.next()) {
-
-                Product product = new Product();
-
-                product.setProductId(result.getInt("product_id"));
-
-                int sellerId = result.getInt("seller_id");
-                product.setSellerId(result.wasNull() ? null : sellerId);
-
-                product.setCategoryId(result.getInt("category_id"));
-                product.setProductName(result.getString("product_name"));
-                product.setDescription(result.getString("description"));
-                product.setPrice(result.getBigDecimal("price"));
-                product.setStock(result.getInt("stock"));
-                product.setStatus(result.getString("status"));
-                product.setRejectionReason(result.getString("rejection_reason"));
-                product.setCreatedAt(result.getTimestamp("created_at"));
-
-                products.add(product);
+                products.add(mapProduct(result));
             }
 
         } catch (Exception e) {
@@ -345,25 +288,7 @@ public class ProductDAO {
             try (ResultSet result = statement.executeQuery()) {
 
                 while (result.next()) {
-
-                    Product product = new Product();
-
-                    product.setProductId(result.getInt("product_id"));
-
-                    int productSellerId = result.getInt("seller_id");
-                    product.setSellerId(
-                            result.wasNull() ? null : productSellerId);
-
-                    product.setCategoryId(result.getInt("category_id"));
-                    product.setProductName(result.getString("product_name"));
-                    product.setDescription(result.getString("description"));
-                    product.setPrice(result.getBigDecimal("price"));
-                    product.setStock(result.getInt("stock"));
-                    product.setStatus(result.getString("status"));
-                    product.setRejectionReason(result.getString("rejection_reason"));
-                    product.setCreatedAt(result.getTimestamp("created_at"));
-
-                    products.add(product);
+                    products.add(mapProduct(result));
                 }
             }
 
@@ -392,24 +317,7 @@ public class ProductDAO {
             try (ResultSet result = statement.executeQuery()) {
 
                 while (result.next()) {
-
-                    Product product = new Product();
-
-                    product.setProductId(result.getInt("product_id"));
-
-                    int sellerId = result.getInt("seller_id");
-                    product.setSellerId(result.wasNull() ? null : sellerId);
-
-                    product.setCategoryId(result.getInt("category_id"));
-                    product.setProductName(result.getString("product_name"));
-                    product.setDescription(result.getString("description"));
-                    product.setPrice(result.getBigDecimal("price"));
-                    product.setStock(result.getInt("stock"));
-                    product.setStatus(result.getString("status"));
-                    product.setRejectionReason(result.getString("rejection_reason"));
-                    product.setCreatedAt(result.getTimestamp("created_at"));
-
-                    products.add(product);
+                    products.add(mapProduct(result));
                 }
             }
 
@@ -438,24 +346,7 @@ public class ProductDAO {
             try (ResultSet result = statement.executeQuery()) {
 
                 while (result.next()) {
-
-                    Product product = new Product();
-
-                    product.setProductId(result.getInt("product_id"));
-
-                    int sellerId = result.getInt("seller_id");
-                    product.setSellerId(result.wasNull() ? null : sellerId);
-
-                    product.setCategoryId(result.getInt("category_id"));
-                    product.setProductName(result.getString("product_name"));
-                    product.setDescription(result.getString("description"));
-                    product.setPrice(result.getBigDecimal("price"));
-                    product.setStock(result.getInt("stock"));
-                    product.setStatus(result.getString("status"));
-                    product.setRejectionReason(result.getString("rejection_reason"));
-                    product.setCreatedAt(result.getTimestamp("created_at"));
-
-                    products.add(product);
+                    products.add(mapProduct(result));
                 }
             }
 
@@ -491,24 +382,7 @@ public class ProductDAO {
                 ResultSet result = statement.executeQuery()) {
 
             while (result.next()) {
-
-                Product product = new Product();
-
-                product.setProductId(result.getInt("product_id"));
-
-                int sellerId = result.getInt("seller_id");
-                product.setSellerId(result.wasNull() ? null : sellerId);
-
-                product.setCategoryId(result.getInt("category_id"));
-                product.setProductName(result.getString("product_name"));
-                product.setDescription(result.getString("description"));
-                product.setPrice(result.getBigDecimal("price"));
-                product.setStock(result.getInt("stock"));
-                product.setStatus(result.getString("status"));
-                product.setRejectionReason(result.getString("rejection_reason"));
-                product.setCreatedAt(result.getTimestamp("created_at"));
-
-                products.add(product);
+                products.add(mapProduct(result));
             }
 
         } catch (Exception e) {
@@ -518,18 +392,21 @@ public class ProductDAO {
         return products;
     }
 
-    // Resubmit a rejected product for approval
-    public boolean resubmitProduct(int productId) {
+    // Resubmit a rejected product belonging to a particular seller
+    public boolean resubmitProduct(int productId, int sellerId) {
 
         String sql = "UPDATE products SET "
                 + "status = 'PENDING', "
                 + "rejection_reason = NULL "
-                + "WHERE product_id = ? AND status = 'REJECTED'";
+                + "WHERE product_id = ? "
+                + "AND seller_id = ? "
+                + "AND status = 'REJECTED'";
 
         try (Connection connection = DBConnection.getConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
 
             statement.setInt(1, productId);
+            statement.setInt(2, sellerId);
 
             return statement.executeUpdate() > 0;
 
@@ -538,4 +415,25 @@ public class ProductDAO {
         }
     }
 
+    // Convert a database row into a Product object
+    private Product mapProduct(ResultSet result) throws Exception {
+
+        Product product = new Product();
+
+        product.setProductId(result.getInt("product_id"));
+
+        int sellerId = result.getInt("seller_id");
+        product.setSellerId(result.wasNull() ? null : sellerId);
+
+        product.setCategoryId(result.getInt("category_id"));
+        product.setProductName(result.getString("product_name"));
+        product.setDescription(result.getString("description"));
+        product.setPrice(result.getBigDecimal("price"));
+        product.setStock(result.getInt("stock"));
+        product.setStatus(result.getString("status"));
+        product.setRejectionReason(result.getString("rejection_reason"));
+        product.setCreatedAt(result.getTimestamp("created_at"));
+
+        return product;
+    }
 }

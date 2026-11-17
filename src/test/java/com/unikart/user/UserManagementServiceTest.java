@@ -20,7 +20,7 @@ public class UserManagementServiceTest extends TestCase {
         authService = new AuthService();
         userManagementService = new UserManagementService();
 
-        String email = "profile_test_" + UUID.randomUUID() + "@unikart.com";
+        String email = "profile_test_" + UUID.randomUUID() + "@chitkara.edu.in";
 
         customer = authService.registerCustomer(
                 "Original Name",

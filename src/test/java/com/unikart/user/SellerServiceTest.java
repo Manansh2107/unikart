@@ -23,7 +23,7 @@ public class SellerServiceTest extends TestCase {
         sellerService = new SellerService();
         applicationDAO = new SellerApplicationDAO();
 
-        testEmail = "seller_test_" + UUID.randomUUID() + "@unikart.com";
+        testEmail = "seller_test_" + UUID.randomUUID() + "@chitkara.edu.in";
 
         customer = authService.registerCustomer(
                 "Seller Test Customer",

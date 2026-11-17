@@ -3,10 +3,13 @@ package com.unikart.user;
 
 import java.sql.SQLException;
 import java.util.Optional;
+import java.util.Locale;
 
 public class AuthService {
 
     private final UserDAO userDAO;
+
+    private static final String COLLEGE_EMAIL_DOMAIN = "@chitkara.edu.in";
 
     public AuthService() {
         this.userDAO = new UserDAO();
@@ -14,6 +17,7 @@ public class AuthService {
 
     /**
      * Registers a new customer.
+     * Only Chitkara college email addresses are accepted.
      * New registrations always receive the CUSTOMER role.
      */
     public User registerCustomer(
@@ -22,23 +26,52 @@ public class AuthService {
             String password,
             String phone) throws SQLException {
 
-        // Validate input
+        // Validate name
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("Name is required.");
         }
 
+        name = name.trim();
+
+        if (name.length() > 100) {
+            throw new IllegalArgumentException(
+                    "Name cannot exceed 100 characters."
+            );
+        }
+
+        // Validate email
         if (email == null || email.isBlank()) {
             throw new IllegalArgumentException("Email is required.");
         }
 
+        email = email.trim().toLowerCase(Locale.ROOT);
+
+        if (email.length() > 150
+                || !email.matches("^[A-Za-z0-9._%+-]+@chitkara\\.edu\\.in$")) {
+            throw new IllegalArgumentException(
+                    "Please enter a valid Chitkara college email ID."
+            );
+        }
+
+        // Validate password
         if (password == null || password.length() < 8) {
             throw new IllegalArgumentException(
                     "Password must contain at least 8 characters."
             );
         }
 
-        name = name.trim();
-        email = email.trim().toLowerCase();
+        // Validate optional phone number
+        if (phone != null && !phone.isBlank()) {
+            phone = phone.trim();
+
+            if (!phone.matches("[0-9]{10}")) {
+                throw new IllegalArgumentException(
+                        "Phone number must contain exactly 10 digits."
+                );
+            }
+        } else {
+            phone = null;
+        }
 
         // Check whether the email is already registered
         if (userDAO.findByEmail(email).isPresent()) {
@@ -84,7 +117,12 @@ public class AuthService {
             return Optional.empty();
         }
 
-        email = email.trim().toLowerCase();
+        email = email.trim().toLowerCase(Locale.ROOT);
+
+        // Only Chitkara college email accounts can log in
+        if (!email.matches("^[A-Za-z0-9._%+-]+@chitkara\\.edu\\.in$")) {
+            return Optional.empty();
+        }
 
         // Find the account using email
         Optional<User> userOptional = userDAO.findByEmail(email);
@@ -108,4 +146,3 @@ public class AuthService {
         return Optional.of(user);
     }
 }
-

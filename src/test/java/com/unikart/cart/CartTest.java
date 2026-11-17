@@ -1,85 +1,248 @@
 
 package com.unikart.cart;
 
+/*
+ * Project Name: Unikart
+ * Developer Name: Manansh
+ * Development Date: 2026-11-17
+ * Module: Cart Testing
+ */
+
+import com.unikart.database.DBConnection;
+
+import junit.framework.TestCase;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.List;
+import java.util.UUID;
 
-public class CartTest {
+public class CartTest extends TestCase {
 
-    public static void main(String[] args) {
+    private CartDAO cartDAO;
+    private int userId;
+    private int cartId;
+    private int productId;
 
-        CartDAO cartDAO = new CartDAO();
+    @Override
+    protected void setUp() throws Exception {
+        super.setUp();
 
-        // Test 1: Get customer's cart
-        Cart cart = cartDAO.getCartByUserId(1);
+        cartDAO = new CartDAO();
 
-        if (cart == null) {
-            System.out.println("Cart not found!");
-            return;
-        }
+        createTestCustomer();
+        createTestProduct();
 
-        System.out.println("Cart found! Cart ID: " + cart.getCartId());
+        Cart cart = cartDAO.createCart(userId);
 
-        // //  Test 2: Add products
-        // System.out.println("Add Notebook: " +
-        //         cartDAO.addItemToCart(1, 1, 2));
+        assertNotNull("Test cart should be created.", cart);
 
-        // System.out.println("Add Pen: " +
-        //         cartDAO.addItemToCart(1, 2, 3));
+        cartId = cart.getCartId();
+    }
 
-        // Test 3: Display cart items
-        List<CartItem> items = cartDAO.getCartItems(1);
+    private void createTestCustomer() throws SQLException {
 
-        System.out.println("\nCart Items:");
+        String sql =
+                "INSERT INTO users (name, email, password_hash, role) " +
+                "VALUES (?, ?, ?, ?)";
 
-        for (CartItem item : items) {
-            System.out.println(
-                    item.getProductName() +
-                    " | Quantity: " + item.getQuantity() +
-                    " | Price: " + item.getUnitPrice()
+        try (Connection connection = DBConnection.getConnection();
+             PreparedStatement ps = connection.prepareStatement(
+                     sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
+
+            ps.setString(1, "Cart Test Customer");
+            ps.setString(
+                    2,
+                    "cart_test_" + UUID.randomUUID() + "@chitkara.edu.in"
             );
+            ps.setString(3, "TEST_ONLY_HASH");
+            ps.setString(4, "CUSTOMER");
+
+            ps.executeUpdate();
+
+            try (ResultSet rs = ps.getGeneratedKeys()) {
+                assertTrue("Customer ID should be generated.", rs.next());
+                userId = rs.getInt(1);
+            }
+        }
+    }
+
+    private void createTestProduct() throws SQLException {
+
+        String categorySql =
+                "SELECT category_id FROM categories LIMIT 1";
+
+        int categoryId;
+
+        try (Connection connection = DBConnection.getConnection();
+             PreparedStatement ps =
+                     connection.prepareStatement(categorySql);
+             ResultSet rs = ps.executeQuery()) {
+
+            assertTrue("At least one category must exist.", rs.next());
+
+            categoryId = rs.getInt("category_id");
         }
 
-        // Test 4: Display total
-        System.out.println("\nCart Total: Rs." +
-                cartDAO.getCartTotal(1));
-        // Test 5: Update notebook quantity
-        System.out.println("\nUpdate Notebook Quantity: " +
-                cartDAO.updateCartItemQuantity(1, 1, 5));
+        String productSql =
+                "INSERT INTO products " +
+                "(category_id, product_name, description, price, stock, status) " +
+                "VALUES (?, ?, ?, ?, ?, ?)";
 
-        // Display updated cart total
-        System.out.println("Updated Cart Total: Rs. " +
-                cartDAO.getCartTotal(1));
+        try (Connection connection = DBConnection.getConnection();
+             PreparedStatement ps = connection.prepareStatement(
+                     productSql, PreparedStatement.RETURN_GENERATED_KEYS)) {
 
+            ps.setInt(1, categoryId);
+            ps.setString(2, "Cart Test Notebook");
+            ps.setString(3, "Temporary product for automated testing.");
+            ps.setBigDecimal(4, new java.math.BigDecimal("50.00"));
+            ps.setInt(5, 20);
+            ps.setString(6, "APPROVED");
 
-         // Test 6: Remove notebook from cart
-        System.out.println("\nRemove Notebook: " +
-                cartDAO.removeItemFromCart(1, 1));
+            ps.executeUpdate();
 
-        // Display cart after removal
-        List<CartItem> updatedItems = cartDAO.getCartItems(1);
-
-        System.out.println("\nCart After Removing Notebook:");
-
-        for (CartItem item : updatedItems) {
-            System.out.println(
-                    item.getProductName() +
-                    " | Quantity: " + item.getQuantity() +
-                    " | Price: " + item.getUnitPrice()
-            );
+            try (ResultSet rs = ps.getGeneratedKeys()) {
+                assertTrue("Product ID should be generated.", rs.next());
+                productId = rs.getInt(1);
+            }
         }
+    }
 
-        System.out.println("New Cart Total: Rs. " +
-                cartDAO.getCartTotal(1)); 
-        // Test 7: Clear entire cart
-        System.out.println("\nClear Cart: " +
-                cartDAO.clearCart(1));
+    public void testGetCartByUserId() {
 
-        // Display cart after clearing
-        List<CartItem> finalItems = cartDAO.getCartItems(1);
+        Cart cart = cartDAO.getCartByUserId(userId);
 
-        System.out.println("Items remaining: " + finalItems.size());
+        assertNotNull(cart);
+        assertEquals(cartId, cart.getCartId());
+        assertEquals(userId, cart.getUserId());
+    }
 
-        System.out.println("Final Cart Total: Rs. " +
-                cartDAO.getCartTotal(1));      
+    public void testAddItemToCart() {
+
+        assertTrue(cartDAO.addItemToCart(cartId, productId, 2));
+
+        List<CartItem> items = cartDAO.getCartItems(cartId);
+
+        assertEquals(1, items.size());
+        assertEquals(2, items.get(0).getQuantity());
+        assertEquals(productId, items.get(0).getProductId());
+    }
+
+    public void testAddSameProductIncreasesQuantity() {
+
+        assertTrue(cartDAO.addItemToCart(cartId, productId, 2));
+        assertTrue(cartDAO.addItemToCart(cartId, productId, 3));
+
+        List<CartItem> items = cartDAO.getCartItems(cartId);
+
+        assertEquals(1, items.size());
+        assertEquals(5, items.get(0).getQuantity());
+    }
+
+    public void testGetCartTotal() {
+
+        assertTrue(cartDAO.addItemToCart(cartId, productId, 2));
+
+        assertEquals(
+                100.0,
+                cartDAO.getCartTotal(cartId),
+                0.01
+        );
+    }
+
+    public void testUpdateCartItemQuantity() {
+
+        assertTrue(cartDAO.addItemToCart(cartId, productId, 2));
+
+        assertTrue(
+                cartDAO.updateCartItemQuantity(cartId, productId, 5)
+        );
+
+        List<CartItem> items = cartDAO.getCartItems(cartId);
+
+        assertEquals(5, items.get(0).getQuantity());
+    }
+
+    public void testRemoveItemFromCart() {
+
+        assertTrue(cartDAO.addItemToCart(cartId, productId, 2));
+
+        assertTrue(
+                cartDAO.removeItemFromCart(cartId, productId)
+        );
+
+        assertTrue(cartDAO.getCartItems(cartId).isEmpty());
+    }
+
+    public void testClearCart() {
+
+        assertTrue(cartDAO.addItemToCart(cartId, productId, 2));
+
+        assertTrue(cartDAO.clearCart(cartId));
+
+        assertTrue(cartDAO.getCartItems(cartId).isEmpty());
+
+        assertEquals(0.0, cartDAO.getCartTotal(cartId), 0.01);
+    }
+
+    public void testInvalidQuantityIsRejected() {
+
+        assertFalse(cartDAO.addItemToCart(cartId, productId, 0));
+        assertFalse(cartDAO.addItemToCart(cartId, productId, -1));
+
+        assertTrue(cartDAO.getCartItems(cartId).isEmpty());
+    }
+
+    @Override
+    protected void tearDown() throws Exception {
+
+        try (Connection connection = DBConnection.getConnection()) {
+
+            // Remove cart items first.
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "DELETE FROM cart_items WHERE cart_id = ?")) {
+
+                if (cartId > 0) {
+                    ps.setInt(1, cartId);
+                    ps.executeUpdate();
+                }
+            }
+
+            // Remove the test cart.
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "DELETE FROM carts WHERE cart_id = ?")) {
+
+                if (cartId > 0) {
+                    ps.setInt(1, cartId);
+                    ps.executeUpdate();
+                }
+            }
+
+            // Remove the test product.
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "DELETE FROM products WHERE product_id = ?")) {
+
+                if (productId > 0) {
+                    ps.setInt(1, productId);
+                    ps.executeUpdate();
+                }
+            }
+
+            // Remove the test customer.
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "DELETE FROM users WHERE user_id = ?")) {
+
+                if (userId > 0) {
+                    ps.setInt(1, userId);
+                    ps.executeUpdate();
+                }
+            }
+
+        } finally {
+            super.tearDown();
+        }
     }
 }

@@ -20,7 +20,7 @@ public class AuthServiceTest extends TestCase {
 
         testEmail = "test_"
                 + UUID.randomUUID()
-                + "@unikart.com";
+                + "@chitkara.edu.in";
     }
 
     public void testCustomerRegistration() throws SQLException {
@@ -106,4 +106,3 @@ public class AuthServiceTest extends TestCase {
         }
     }
 }
-

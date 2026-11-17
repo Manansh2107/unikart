@@ -21,7 +21,7 @@ public class PasswordChangeServiceTest extends TestCase {
         authService = new AuthService();
         passwordChangeService = new PasswordChangeService();
 
-        email = "password_test_" + UUID.randomUUID() + "@unikart.com";
+        email = "password_test_" + UUID.randomUUID() + "@chitkara.edu.in";
 
         customer = authService.registerCustomer(
                 "Password Test Customer",

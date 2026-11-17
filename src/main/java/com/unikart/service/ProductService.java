@@ -15,7 +15,7 @@ public class ProductService {
         this.productDAO = new ProductDAO();
     }
 
-    // Get all products
+    // Get all products (admin use)
     public List<Product> getAllProducts() {
         return productDAO.getAllProducts();
     }
@@ -49,10 +49,12 @@ public class ProductService {
         validateProduct(product);
 
         if (product.getProductId() <= 0 || sellerId <= 0) {
-            throw new IllegalArgumentException("Invalid product or seller ID!");
+            throw new IllegalArgumentException(
+                    "Invalid product or seller ID!");
         }
 
-        Product existingProduct = productDAO.getProductById(product.getProductId());
+        Product existingProduct =
+                productDAO.getProductById(product.getProductId());
 
         if (existingProduct == null) {
             throw new IllegalArgumentException("Product not found!");
@@ -64,14 +66,15 @@ public class ProductService {
                     "You cannot update another seller's product!");
         }
 
-        return productDAO.updateProduct(product);
+        return productDAO.updateProduct(product, sellerId);
     }
 
     // Delete a product
     public boolean deleteProduct(int productId, int sellerId) {
 
         if (productId <= 0 || sellerId <= 0) {
-            throw new IllegalArgumentException("Invalid product or seller ID!");
+            throw new IllegalArgumentException(
+                    "Invalid product or seller ID!");
         }
 
         Product existingProduct = productDAO.getProductById(productId);
@@ -86,7 +89,7 @@ public class ProductService {
                     "You cannot delete another seller's product!");
         }
 
-        return productDAO.deleteProduct(productId);
+        return productDAO.deleteProduct(productId, sellerId);
     }
 
     // Get products belonging to a seller
@@ -140,13 +143,14 @@ public class ProductService {
     }
 
     // Resubmit a rejected product
-    public boolean resubmitProduct(int productId) {
+    public boolean resubmitProduct(int productId, int sellerId) {
 
-        if (productId <= 0) {
-            throw new IllegalArgumentException("Invalid product ID!");
+        if (productId <= 0 || sellerId <= 0) {
+            throw new IllegalArgumentException(
+                    "Invalid product or seller ID!");
         }
 
-        return productDAO.resubmitProduct(productId);
+        return productDAO.resubmitProduct(productId, sellerId);
     }
 
     // Search products

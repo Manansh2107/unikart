@@ -1,6 +1,7 @@
 
 package com.unikart.user;
 
+import java.security.MessageDigest;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Base64;
@@ -21,10 +22,6 @@ public final class PasswordUtil {
         // Prevent object creation.
     }
 
-    /**
-     * Hashes a password using PBKDF2 with a random salt.
-     * Store the returned string in the password_hash column.
-     */
     public static String hashPassword(String password) {
 
         if (password == null || password.isEmpty()) {
@@ -41,9 +38,6 @@ public final class PasswordUtil {
                 + Base64.getEncoder().encodeToString(hash);
     }
 
-    /**
-     * Verifies a password against a previously stored hash.
-     */
     public static boolean verifyPassword(
             String password, String storedHash) {
 
@@ -84,6 +78,7 @@ public final class PasswordUtil {
 
     private static byte[] generateHash(
             char[] password, byte[] salt) {
+
         return generateHash(password, salt, ITERATIONS);
     }
 
@@ -111,22 +106,9 @@ public final class PasswordUtil {
         }
     }
 
-    /**
-     * Compares hashes without stopping at the first differing byte.
-     */
     private static boolean constantTimeEquals(
             byte[] expected, byte[] actual) {
 
-        if (expected.length != actual.length) {
-            return false;
-        }
-
-        int difference = 0;
-
-        for (int i = 0; i < expected.length; i++) {
-            difference |= expected[i] ^ actual[i];
-        }
-
-        return difference == 0;
+        return MessageDigest.isEqual(expected, actual);
     }
 }
