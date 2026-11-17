@@ -17,11 +17,9 @@ public class Product {
     private String rejectionReason;
     private Timestamp createdAt;
 
-    // Default constructor
     public Product() {
     }
 
-    // Parameterized constructor
     public Product(int productId, Integer sellerId, int categoryId,
             String productName, String description,
             BigDecimal price, int stock, String status,
@@ -119,5 +117,3 @@ public class Product {
         this.createdAt = createdAt;
     }
 }
-
-

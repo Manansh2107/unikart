@@ -1,7 +1,6 @@
 
 package com.unikart.product;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 public class ProductTest {
@@ -10,121 +9,55 @@ public class ProductTest {
 
         ProductDAO productDAO = new ProductDAO();
 
-        // 1. Create a test product
-        Product product = new Product();
+        // 1. Test Pending Products
+        System.out.println("\n===== PENDING PRODUCTS =====");
 
-        product.setSellerId(null);
-        product.setCategoryId(1);
-        product.setProductName("Admin Workflow Test");
-        product.setDescription("Testing ProductDAO features");
-        product.setPrice(new BigDecimal("99.00"));
-        product.setStock(10);
+        List<Product> pendingProducts = productDAO.getPendingProducts();
 
-        boolean added = productDAO.addProduct(product);
-
-        if (!added) {
-            System.out.println("Product creation failed!");
-            return;
-        }
-
-        System.out.println("Product added successfully!");
-
-        // Get newly added product ID
-        List<Product> products = productDAO.getAllProducts();
-
-        int productId = products.get(0).getProductId();
-
-        System.out.println("Test Product ID: " + productId);
-
-        // 2. Test approval
-        System.out.println("\nApprove Product:");
-
-        boolean approved = productDAO.approveProduct(productId);
-
-        System.out.println(approved ? "Approved successfully!" : "Approval failed!");
-
-        Product p = productDAO.getProductById(productId);
-
-        System.out.println("Status: " + p.getStatus());
-
-        // 3. Test rejection
-        System.out.println("\nReject Product:");
-
-        boolean rejected = productDAO.rejectProduct(
-                productId,
-                "Product information needs correction");
-
-        System.out.println(rejected ? "Rejected successfully!" : "Rejection failed!");
-
-        p = productDAO.getProductById(productId);
-
-        System.out.println("Status: " + p.getStatus());
-        System.out.println("Reason: " + p.getRejectionReason());
-
-        // 4. Test resubmission
-        System.out.println("\nResubmit Product:");
-
-        boolean resubmitted = productDAO.resubmitProduct(productId);
-
-        System.out.println(resubmitted ? "Resubmitted successfully!" : "Resubmission failed!");
-
-        p = productDAO.getProductById(productId);
-
-        System.out.println("Status: " + p.getStatus());
-        System.out.println("Rejection Reason: " + p.getRejectionReason());
-
-        // 5. Approve again for search and filtering tests
-        System.out.println("\nApprove Product Again:");
-
-        boolean approvedAgain = productDAO.approveProduct(productId);
-
-        System.out.println(approvedAgain ? "Approved successfully!" : "Approval failed!");
-
-        // 6. Test product search
-        System.out.println("\nSearch Products:");
-
-        List<Product> searchResults = productDAO.searchProducts("Admin Workflow");
-
-        if (searchResults.isEmpty()) {
-            System.out.println("No matching products found!");
+        if (pendingProducts.isEmpty()) {
+            System.out.println("No pending products found.");
         } else {
-            for (Product item : searchResults) {
+            for (Product product : pendingProducts) {
                 System.out.println(
-                        item.getProductId() + " - " +
-                                item.getProductName());
+                        product.getProductId() + " - " +
+                                product.getProductName() + " - " +
+                                product.getStatus());
             }
         }
 
-        // 7. Test category filtering
-        System.out.println("\nProducts By Category:");
+        // 2. Test Approved Products
+        System.out.println("\n===== APPROVED PRODUCTS =====");
 
-        List<Product> categoryResults = productDAO.getProductsByCategory(1);
+        List<Product> approvedProducts = productDAO.getApprovedProducts();
 
-        if (categoryResults.isEmpty()) {
-            System.out.println("No products found in this category!");
+        if (approvedProducts.isEmpty()) {
+            System.out.println("No approved products found.");
         } else {
-            for (Product item : categoryResults) {
+            for (Product product : approvedProducts) {
                 System.out.println(
-                        item.getProductName() + " - " +
-                                item.getPrice());
+                        product.getProductId() + " - " +
+                                product.getProductName() + " - " +
+                                product.getStatus());
             }
         }
 
-        // 8. Test price sorting
-        System.out.println("\nProducts Sorted By Price:");
+        // 3. Test Rejected Products
+        System.out.println("\n===== REJECTED PRODUCTS =====");
 
-        List<Product> sortedProducts = productDAO.sortProductsByPrice("ASC");
+        List<Product> rejectedProducts = productDAO.getRejectedProducts();
 
-        if (sortedProducts.isEmpty()) {
-            System.out.println("No approved products available!");
+        if (rejectedProducts.isEmpty()) {
+            System.out.println("No rejected products found.");
         } else {
-            for (Product item : sortedProducts) {
+            for (Product product : rejectedProducts) {
                 System.out.println(
-                        item.getProductName() + " - " +
-                                item.getPrice());
+                        product.getProductId() + " - " +
+                                product.getProductName() + " - " +
+                                product.getStatus() + " - " +
+                                product.getRejectionReason());
             }
         }
 
-        System.out.println("\nAll ProductDAO tests completed!");
+        System.out.println("\nAll Product Status Tests Completed!");
     }
 }
