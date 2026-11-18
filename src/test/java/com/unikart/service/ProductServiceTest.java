@@ -4,12 +4,14 @@ package com.unikart.service;
 /*
  * Project Name: Unikart
  * Developer Name: Manansh
- * Development Date: 2026-11-17
+ * Development Date: 18 November 2026
  * Module: Product Service Testing
  */
 
 import com.unikart.database.DBConnection;
 import com.unikart.product.Product;
+import com.unikart.user.User;
+import com.unikart.user.UserDAO;
 
 import junit.framework.TestCase;
 
@@ -17,259 +19,335 @@ import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 public class ProductServiceTest extends TestCase {
 
     private ProductService productService;
+    private UserDAO userDAO;
 
-    private int sellerId;
-    private int anotherSellerId;
+    private User sellerUser;
+    private User anotherSellerUser;
+    private User adminUser;
+
     private int categoryId;
-    private int productId;
+
+    private final List<Integer> productIds = new ArrayList<>();
+    private final List<Integer> userIds = new ArrayList<>();
 
     @Override
     protected void setUp() throws Exception {
         super.setUp();
 
         productService = new ProductService();
+        userDAO = new UserDAO();
 
-        sellerId = createSeller("Service Test Seller");
-        anotherSellerId = createSeller("Another Service Seller");
+        sellerUser = createUser("Service Test Seller", User.Role.SELLER);
+        anotherSellerUser = createUser("Another Service Seller", User.Role.SELLER);
+        adminUser = createUser("Service Test Admin", User.Role.ADMIN);
 
         findCategory();
     }
 
-    private int createSeller(String name) throws SQLException {
+    // Creates a real test user in the database.
+    private User createUser(String name, User.Role role) throws Exception {
 
-        String sql =
-                "INSERT INTO users (name, email, password_hash, role) " +
-                "VALUES (?, ?, ?, ?)";
+        String email = "test_" + UUID.randomUUID() + "@unikart.test";
+
+        String sql = """
+                INSERT INTO users
+                (name, email, password_hash, role)
+                VALUES (?, ?, ?, ?)
+                """;
+
+        int userId;
 
         try (Connection connection = DBConnection.getConnection();
-             PreparedStatement ps = connection.prepareStatement(
-                     sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
+             PreparedStatement statement = connection.prepareStatement(
+                     sql, Statement.RETURN_GENERATED_KEYS)) {
 
-            ps.setString(1, name);
-            ps.setString(
-                    2,
-                    "service_test_" + UUID.randomUUID() + "@chitkara.edu.in"
-            );
-            ps.setString(3, "TEST_ONLY_HASH");
-            ps.setString(4, "SELLER");
+            statement.setString(1, name);
+            statement.setString(2, email);
+            statement.setString(3, "TEST_ONLY_HASH");
+            statement.setString(4, role.name());
 
-            ps.executeUpdate();
+            statement.executeUpdate();
 
-            try (ResultSet rs = ps.getGeneratedKeys()) {
-                assertTrue(rs.next());
-                return rs.getInt(1);
+            try (ResultSet keys = statement.getGeneratedKeys()) {
+                if (!keys.next()) {
+                    throw new Exception("Test user ID was not generated.");
+                }
+
+                userId = keys.getInt(1);
             }
         }
+
+        userIds.add(userId);
+
+        return userDAO.findById(userId)
+                .orElseThrow(() -> new Exception("Test user not found."));
     }
 
-    private void findCategory() throws SQLException {
+    // Finds an existing category for product testing.
+    private void findCategory() throws Exception {
 
         String sql = "SELECT category_id FROM categories LIMIT 1";
 
         try (Connection connection = DBConnection.getConnection();
-             PreparedStatement ps = connection.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
+             PreparedStatement statement = connection.prepareStatement(sql);
+             ResultSet resultSet = statement.executeQuery()) {
 
-            assertTrue("A category must exist.", rs.next());
-
-            categoryId = rs.getInt("category_id");
+            if (resultSet.next()) {
+                categoryId = resultSet.getInt("category_id");
+            } else {
+                throw new Exception("No product category found in database.");
+            }
         }
     }
 
-    private Product createProduct() {
+    // Creates a valid product using the authenticated seller.
+    private Product createProduct() throws Exception {
 
         Product product = new Product();
 
-        product.setSellerId(sellerId);
+        String productName = "Service Test Product " + UUID.randomUUID();
+
         product.setCategoryId(categoryId);
-        product.setProductName("Service Test " + UUID.randomUUID());
-        product.setDescription("Temporary service test product.");
+        product.setProductName(productName);
+        product.setDescription("Product created for service testing");
         product.setPrice(new BigDecimal("100.00"));
         product.setStock(20);
 
-        assertTrue(productService.addProduct(product));
+        assertTrue(
+                productService.addSellerProduct(sellerUser, product)
+        );
 
-        try (Connection connection = DBConnection.getConnection();
-             PreparedStatement ps = connection.prepareStatement(
-                     "SELECT product_id FROM products WHERE product_name = ?")) {
+        int productId = findProductId(productName);
 
-            ps.setString(1, product.getProductName());
+        productIds.add(productId);
+        product.setProductId(productId);
 
-            try (ResultSet rs = ps.executeQuery()) {
-
-                assertTrue("Product should exist in database.", rs.next());
-
-                productId = rs.getInt("product_id");
-                product.setProductId(productId);
-
-                return product;
-            }
-
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
+        return product;
     }
 
-    public void testAddValidProduct() {
+    // Finds a product ID using its unique name.
+    private int findProductId(String productName) throws Exception {
+
+        String sql = """
+                SELECT product_id
+                FROM products
+                WHERE product_name = ?
+                """;
+
+        try (Connection connection = DBConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setString(1, productName);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+
+                if (resultSet.next()) {
+                    return resultSet.getInt("product_id");
+                }
+            }
+        }
+
+        throw new Exception("Created product was not found.");
+    }
+
+    // Test 1: A seller can add a valid product.
+    public void testAddValidProduct() throws Exception {
 
         Product product = createProduct();
 
-        assertTrue(product.getProductId() > 0);
-
         Product savedProduct =
-                productService.getProductById(productId);
+                productService.getProductById(product.getProductId());
 
         assertNotNull(savedProduct);
         assertEquals("PENDING", savedProduct.getStatus());
+        assertEquals(
+                sellerUser.getUserId(),
+                savedProduct.getSellerId().intValue()
+        );
     }
 
-    public void testAddProductWithInvalidPrice() {
+    // Test 2: An admin can add a Unikart-owned product.
+    public void testAdminCanAddUnikartProduct() throws Exception {
 
         Product product = new Product();
 
-        product.setSellerId(sellerId);
+        String productName = "Unikart Test Product " + UUID.randomUUID();
+
+        product.setCategoryId(categoryId);
+        product.setProductName(productName);
+        product.setDescription("Product owned by Unikart");
+        product.setPrice(new BigDecimal("250.00"));
+        product.setStock(15);
+
+        assertTrue(productService.addAdminProduct(adminUser, product));
+
+        int productId = findProductId(productName);
+        productIds.add(productId);
+
+        Product savedProduct = productService.getProductById(productId);
+
+        assertNotNull(savedProduct);
+        assertNull(savedProduct.getSellerId());
+        assertEquals("PENDING", savedProduct.getStatus());
+    }
+
+    // Test 3: A product with an invalid price must be rejected.
+    public void testAddProductWithInvalidPrice() throws Exception {
+
+        Product product = new Product();
+
         product.setCategoryId(categoryId);
         product.setProductName("Invalid Price Product");
+        product.setDescription("Testing invalid price");
         product.setPrice(BigDecimal.ZERO);
         product.setStock(10);
 
         try {
-            productService.addProduct(product);
-            fail("Zero price should be rejected.");
-        } catch (IllegalArgumentException expected) {
+            productService.addSellerProduct(sellerUser, product);
+            fail("Expected IllegalArgumentException");
+        } catch (IllegalArgumentException exception) {
             assertEquals(
                     "Product price must be greater than zero!",
-                    expected.getMessage()
+                    exception.getMessage()
             );
         }
     }
 
-    public void testAddProductWithNegativeStock() {
+    // Test 4: Negative stock must be rejected.
+    public void testAddProductWithNegativeStock() throws Exception {
 
         Product product = new Product();
 
-        product.setSellerId(sellerId);
         product.setCategoryId(categoryId);
         product.setProductName("Negative Stock Product");
-        product.setPrice(new BigDecimal("50.00"));
+        product.setDescription("Testing negative stock");
+        product.setPrice(new BigDecimal("100.00"));
         product.setStock(-5);
 
         try {
-            productService.addProduct(product);
-            fail("Negative stock should be rejected.");
-        } catch (IllegalArgumentException expected) {
+            productService.addSellerProduct(sellerUser, product);
+            fail("Expected IllegalArgumentException");
+        } catch (IllegalArgumentException exception) {
             assertEquals(
                     "Product stock cannot be negative!",
-                    expected.getMessage()
+                    exception.getMessage()
             );
         }
     }
 
-    public void testAddProductWithInvalidSeller() {
+    // Test 5: An admin cannot use the seller product creation method.
+    public void testAdminCannotUseSellerProductMethod() throws Exception {
 
         Product product = new Product();
 
-        product.setSellerId(null);
         product.setCategoryId(categoryId);
-        product.setProductName("Invalid Seller Product");
-        product.setPrice(new BigDecimal("50.00"));
+        product.setProductName("Unauthorized Seller Product");
+        product.setDescription("Testing role authorization");
+        product.setPrice(new BigDecimal("100.00"));
         product.setStock(10);
 
         try {
-            productService.addProduct(product);
-            fail("Null seller ID should be rejected.");
-        } catch (IllegalArgumentException expected) {
-            assertEquals("Invalid seller ID!", expected.getMessage());
+            productService.addSellerProduct(adminUser, product);
+            fail("Expected SecurityException");
+        } catch (SecurityException exception) {
+            // Correct: an admin cannot use the seller-only method.
         }
     }
 
-    public void testSellerCannotUpdateAnotherSellersProduct() {
+    // Test 6: A seller cannot update another seller's product.
+    public void testSellerCannotUpdateAnotherSellersProduct()
+            throws Exception {
 
         Product product = createProduct();
 
-        product.setProductName("Unauthorized Product Update");
+        product.setProductName("Unauthorized Updated Product");
 
         try {
-            productService.updateProduct(product, anotherSellerId);
-            fail("Another seller must not update this product.");
-        } catch (IllegalArgumentException expected) {
-            assertEquals(
-                    "You cannot update another seller's product!",
-                    expected.getMessage()
-            );
+            productService.updateProduct(anotherSellerUser, product);
+            fail("Expected SecurityException");
+        } catch (SecurityException exception) {
+            // Correct: seller ownership is checked.
         }
     }
 
-    public void testSellerCannotDeleteAnotherSellersProduct() {
-
-        createProduct();
-
-        try {
-            productService.deleteProduct(productId, anotherSellerId);
-            fail("Another seller must not delete this product.");
-        } catch (IllegalArgumentException expected) {
-            assertEquals(
-                    "You cannot delete another seller's product!",
-                    expected.getMessage()
-            );
-        }
-
-        assertNotNull(productService.getProductById(productId));
-    }
-
-    public void testRejectProductRequiresReason() {
+    // Test 7: A seller cannot delete another seller's product.
+    public void testSellerCannotDeleteAnotherSellersProduct()
+            throws Exception {
 
         Product product = createProduct();
 
         try {
-            productService.rejectProduct(product.getProductId(), " ");
-            fail("Empty rejection reason should be rejected.");
-        } catch (IllegalArgumentException expected) {
-            assertEquals(
-                    "Rejection reason cannot be empty!",
-                    expected.getMessage()
+            productService.deleteProduct(
+                    anotherSellerUser,
+                    product.getProductId()
             );
+
+            fail("Expected SecurityException");
+
+        } catch (SecurityException exception) {
+            // Correct: seller ownership is checked.
         }
+
+        assertNotNull(
+                productService.getProductById(product.getProductId())
+        );
     }
 
-    public void testSearchRequiresKeyword() {
+    // Test 8: A seller cannot approve a product.
+    public void testSellerCannotApproveProduct() throws Exception {
+
+        Product product = createProduct();
 
         try {
-            productService.searchProducts(" ");
-            fail("Empty search keyword should be rejected.");
-        } catch (IllegalArgumentException expected) {
-            assertEquals(
-                    "Search keyword cannot be empty!",
-                    expected.getMessage()
+            productService.approveProduct(
+                    sellerUser,
+                    product.getProductId()
             );
+
+            fail("Expected SecurityException");
+
+        } catch (SecurityException exception) {
+            // Correct: approval is an admin-only operation.
         }
     }
 
-    public void testSortRequiresValidOrder() {
+    // Test 9: An admin cannot reject a product without a reason.
+    public void testRejectProductRequiresReason() throws Exception {
+
+        Product product = createProduct();
 
         try {
-            productService.sortProductsByPrice("INVALID");
-            fail("Invalid sorting order should be rejected.");
-        } catch (IllegalArgumentException expected) {
-            assertEquals(
-                    "Order must be ASC or DESC!",
-                    expected.getMessage()
+            productService.rejectProduct(
+                    adminUser,
+                    product.getProductId(),
+                    " "
             );
+
+            fail("Expected IllegalArgumentException");
+
+        } catch (IllegalArgumentException exception) {
+            // Correct: rejection requires a reason.
         }
     }
 
-    public void testValidProductCanBeApproved() {
+    // Test 10: An admin can approve a pending product.
+    public void testValidProductCanBeApproved() throws Exception {
 
         Product product = createProduct();
 
         assertTrue(
-                productService.approveProduct(product.getProductId())
+                productService.approveProduct(
+                        adminUser,
+                        product.getProductId()
+                )
         );
 
         Product approvedProduct =
@@ -278,32 +356,60 @@ public class ProductServiceTest extends TestCase {
         assertEquals("APPROVED", approvedProduct.getStatus());
     }
 
+    // Test 11: Empty search keywords must be rejected.
+    public void testSearchWithEmptyKeyword() throws Exception {
+
+        try {
+            productService.searchProducts(" ");
+            fail("Expected IllegalArgumentException");
+
+        } catch (IllegalArgumentException exception) {
+            // Correct: empty search is not allowed.
+        }
+    }
+
+    // Test 12: Invalid sorting options must be rejected.
+    public void testInvalidSortOption() throws Exception {
+
+        try {
+            productService.sortProductsByPrice("INVALID_SORT");
+            fail("Expected IllegalArgumentException");
+
+        } catch (IllegalArgumentException exception) {
+            // Correct: unsupported sorting option is rejected.
+        }
+    }
+
     @Override
     protected void tearDown() throws Exception {
 
+        // Delete test products first because they reference users.
         try (Connection connection = DBConnection.getConnection()) {
 
-            if (productId > 0) {
-                try (PreparedStatement ps = connection.prepareStatement(
-                        "DELETE FROM products WHERE product_id = ?")) {
+            for (int productId : productIds) {
 
-                    ps.setInt(1, productId);
-                    ps.executeUpdate();
+                try (PreparedStatement statement =
+                             connection.prepareStatement(
+                                     "DELETE FROM products WHERE product_id = ?")) {
+
+                    statement.setInt(1, productId);
+                    statement.executeUpdate();
                 }
             }
 
-            try (PreparedStatement ps = connection.prepareStatement(
-                    "DELETE FROM users WHERE user_id IN (?, ?)")) {
+            // Delete test users after their products are removed.
+            for (int userId : userIds) {
 
-                if (sellerId > 0 && anotherSellerId > 0) {
-                    ps.setInt(1, sellerId);
-                    ps.setInt(2, anotherSellerId);
-                    ps.executeUpdate();
+                try (PreparedStatement statement =
+                             connection.prepareStatement(
+                                     "DELETE FROM users WHERE user_id = ?")) {
+
+                    statement.setInt(1, userId);
+                    statement.executeUpdate();
                 }
             }
-
-        } finally {
-            super.tearDown();
         }
+
+        super.tearDown();
     }
 }

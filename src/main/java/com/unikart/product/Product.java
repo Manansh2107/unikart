@@ -20,11 +20,18 @@ public class Product {
     public Product() {
     }
 
-    public Product(int productId, Integer sellerId, int categoryId,
-            String productName, String description,
-            BigDecimal price, int stock, String status,
-            String rejectionReason, Timestamp createdAt) {
-
+    public Product(
+            int productId,
+            Integer sellerId,
+            int categoryId,
+            String productName,
+            String description,
+            BigDecimal price,
+            int stock,
+            String status,
+            String rejectionReason,
+            Timestamp createdAt
+    ) {
         this.productId = productId;
         this.sellerId = sellerId;
         this.categoryId = categoryId;

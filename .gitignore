@@ -6,3 +6,5 @@ target/
 # Local database credentials
 src/main/resources/db.properties
 .env
+# Generated dependency classpath
+classpath.txt

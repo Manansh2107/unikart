@@ -3,168 +3,283 @@ package com.unikart.service;
 
 import com.unikart.product.Product;
 import com.unikart.product.ProductDAO;
+import com.unikart.user.User;
+import com.unikart.user.UserDAO;
 
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.util.List;
 
 public class ProductService {
 
-    private final ProductDAO productDAO;
+    private final ProductDAO productDAO = new ProductDAO();
+    private final UserDAO userDAO = new UserDAO();
 
-    public ProductService() {
-        this.productDAO = new ProductDAO();
+    // Verify the user's role using the database.
+    private User requireRole(User authenticatedUser, User.Role requiredRole) {
+
+        if (authenticatedUser == null || authenticatedUser.getUserId() <= 0) {
+            throw new SecurityException("Authentication required!");
+        }
+
+        User databaseUser;
+
+        try {
+            databaseUser = userDAO.findById(authenticatedUser.getUserId())
+                    .orElseThrow(() ->
+                            new SecurityException("User not found!"));
+
+        } catch (SQLException e) {
+            throw new RuntimeException(
+                    "Unable to verify user permissions!", e
+            );
+        }
+
+        if (databaseUser.getRole() != requiredRole) {
+            throw new SecurityException(
+                    "Access denied! Required role: " + requiredRole
+            );
+        }
+
+        return databaseUser;
     }
 
-    // Get all products (admin use)
-    public List<Product> getAllProducts() {
+    // ADMIN: View all products.
+    public List<Product> getAllProducts(User admin) {
+
+        requireRole(admin, User.Role.ADMIN);
+
         return productDAO.getAllProducts();
     }
 
-    // Get product by ID
+    // Public: View one product.
     public Product getProductById(int productId) {
-
-        if (productId <= 0) {
-            throw new IllegalArgumentException("Invalid product ID!");
-        }
 
         return productDAO.getProductById(productId);
     }
 
-    // Add a new product
-    public boolean addProduct(Product product) {
+    // SELLER: Add a product.
+    public boolean addSellerProduct(User authenticatedSeller, Product product) {
+
+        User seller = requireRole(
+                authenticatedSeller,
+                User.Role.SELLER
+        );
 
         validateProduct(product);
 
-        if (product.getSellerId() == null ||
-                product.getSellerId() <= 0) {
-            throw new IllegalArgumentException("Invalid seller ID!");
-        }
+        product.setSellerId(seller.getUserId());
 
         return productDAO.addProduct(product);
     }
 
-    // Update an existing product
-    public boolean updateProduct(Product product, int sellerId) {
+    // ADMIN: Add a Unikart-owned product.
+    public boolean addAdminProduct(User authenticatedAdmin, Product product) {
+
+        requireRole(authenticatedAdmin, User.Role.ADMIN);
 
         validateProduct(product);
 
-        if (product.getProductId() <= 0 || sellerId <= 0) {
-            throw new IllegalArgumentException(
-                    "Invalid product or seller ID!");
-        }
+        product.setSellerId(null);
 
-        Product existingProduct =
-                productDAO.getProductById(product.getProductId());
+        return productDAO.addProduct(product);
+    }
 
-        if (existingProduct == null) {
+    // SELLER: Update their own product.
+    public boolean updateProduct(User authenticatedSeller, Product product) {
+
+        User seller = requireRole(
+                authenticatedSeller,
+                User.Role.SELLER
+        );
+
+        validateProduct(product);
+
+        Product existing = productDAO.getProductById(
+                product.getProductId()
+        );
+
+        if (existing == null) {
             throw new IllegalArgumentException("Product not found!");
         }
 
-        if (existingProduct.getSellerId() == null ||
-                existingProduct.getSellerId() != sellerId) {
-            throw new IllegalArgumentException(
-                    "You cannot update another seller's product!");
+        if (existing.getSellerId() == null
+                || existing.getSellerId() != seller.getUserId()) {
+
+            throw new SecurityException(
+                    "You cannot update another seller's product!"
+            );
         }
 
-        return productDAO.updateProduct(product, sellerId);
+        return productDAO.updateProduct(product, seller.getUserId());
     }
 
-    // Delete a product
-    public boolean deleteProduct(int productId, int sellerId) {
+    // ADMIN: Update a Unikart-owned product.
+    public boolean updateAdminProduct(User authenticatedAdmin, Product product) {
 
-        if (productId <= 0 || sellerId <= 0) {
-            throw new IllegalArgumentException(
-                    "Invalid product or seller ID!");
-        }
+        requireRole(authenticatedAdmin, User.Role.ADMIN);
 
-        Product existingProduct = productDAO.getProductById(productId);
+        validateProduct(product);
 
-        if (existingProduct == null) {
+        Product existing = productDAO.getProductById(
+                product.getProductId()
+        );
+
+        if (existing == null) {
             throw new IllegalArgumentException("Product not found!");
         }
 
-        if (existingProduct.getSellerId() == null ||
-                existingProduct.getSellerId() != sellerId) {
-            throw new IllegalArgumentException(
-                    "You cannot delete another seller's product!");
+        if (existing.getSellerId() != null) {
+            throw new SecurityException(
+                    "This product is not owned by Unikart!"
+            );
         }
 
-        return productDAO.deleteProduct(productId, sellerId);
+        return productDAO.updateUnikartProduct(product);
     }
 
-    // Get products belonging to a seller
-    public List<Product> getProductsBySellerId(int sellerId) {
+    // SELLER: Delete their own product.
+    public boolean deleteProduct(User authenticatedSeller, int productId) {
 
-        if (sellerId <= 0) {
-            throw new IllegalArgumentException("Invalid seller ID!");
+        User seller = requireRole(
+                authenticatedSeller,
+                User.Role.SELLER
+        );
+
+        Product existing = productDAO.getProductById(productId);
+
+        if (existing == null) {
+            throw new IllegalArgumentException("Product not found!");
         }
 
-        return productDAO.getProductsBySellerId(sellerId);
+        if (existing.getSellerId() == null
+                || existing.getSellerId() != seller.getUserId()) {
+
+            throw new SecurityException(
+                    "You cannot delete another seller's product!"
+            );
+        }
+
+        return productDAO.deleteProduct(productId, seller.getUserId());
     }
 
-    // Get pending products
-    public List<Product> getPendingProducts() {
+    // ADMIN: Delete a Unikart-owned product.
+    public boolean deleteAdminProduct(User authenticatedAdmin, int productId) {
+
+        requireRole(authenticatedAdmin, User.Role.ADMIN);
+
+        Product existing = productDAO.getProductById(productId);
+
+        if (existing == null) {
+            throw new IllegalArgumentException("Product not found!");
+        }
+
+        if (existing.getSellerId() != null) {
+            throw new SecurityException(
+                    "This product is not owned by Unikart!"
+            );
+        }
+
+        return productDAO.deleteUnikartProduct(productId);
+    }
+
+    // SELLER: View their own products.
+    public List<Product> getProductsBySellerId(User authenticatedSeller) {
+
+        User seller = requireRole(
+                authenticatedSeller,
+                User.Role.SELLER
+        );
+
+        return productDAO.getProductsBySellerId(seller.getUserId());
+    }
+
+    // ADMIN: View pending products.
+    public List<Product> getPendingProducts(User authenticatedAdmin) {
+
+        requireRole(authenticatedAdmin, User.Role.ADMIN);
+
         return productDAO.getPendingProducts();
     }
 
-    // Get approved products
+    // Public: View approved products.
     public List<Product> getApprovedProducts() {
+
         return productDAO.getApprovedProducts();
     }
 
-    // Get rejected products
-    public List<Product> getRejectedProducts() {
+    // ADMIN: View rejected products.
+    public List<Product> getRejectedProducts(User authenticatedAdmin) {
+
+        requireRole(authenticatedAdmin, User.Role.ADMIN);
+
         return productDAO.getRejectedProducts();
     }
 
-    // Approve a product
-    public boolean approveProduct(int productId) {
+    // ADMIN: Approve a pending product.
+    public boolean approveProduct(User authenticatedAdmin, int productId) {
 
-        if (productId <= 0) {
-            throw new IllegalArgumentException("Invalid product ID!");
-        }
+        requireRole(authenticatedAdmin, User.Role.ADMIN);
 
         return productDAO.approveProduct(productId);
     }
 
-    // Reject a product
-    public boolean rejectProduct(int productId, String reason) {
+    // ADMIN: Reject a pending product.
+    public boolean rejectProduct(
+            User authenticatedAdmin,
+            int productId,
+            String reason
+    ) {
 
-        if (productId <= 0) {
-            throw new IllegalArgumentException("Invalid product ID!");
-        }
+        requireRole(authenticatedAdmin, User.Role.ADMIN);
 
         if (reason == null || reason.trim().isEmpty()) {
             throw new IllegalArgumentException(
-                    "Rejection reason cannot be empty!");
+                    "Rejection reason is required!"
+            );
         }
 
         return productDAO.rejectProduct(productId, reason.trim());
     }
 
-    // Resubmit a rejected product
-    public boolean resubmitProduct(int productId, int sellerId) {
+    // SELLER: Resubmit a rejected product.
+    public boolean resubmitProduct(User authenticatedSeller, int productId) {
 
-        if (productId <= 0 || sellerId <= 0) {
-            throw new IllegalArgumentException(
-                    "Invalid product or seller ID!");
+        User seller = requireRole(
+                authenticatedSeller,
+                User.Role.SELLER
+        );
+
+        Product product = productDAO.getProductById(productId);
+
+        if (product == null) {
+            throw new IllegalArgumentException("Product not found!");
         }
 
-        return productDAO.resubmitProduct(productId, sellerId);
+        if (product.getSellerId() == null
+                || product.getSellerId() != seller.getUserId()) {
+
+            throw new SecurityException(
+                    "You cannot resubmit another seller's product!"
+            );
+        }
+
+        return productDAO.resubmitProduct(productId, seller.getUserId());
     }
 
-    // Search products
+    // Public: Search approved products.
     public List<Product> searchProducts(String keyword) {
 
         if (keyword == null || keyword.trim().isEmpty()) {
             throw new IllegalArgumentException(
-                    "Search keyword cannot be empty!");
+                    "Search keyword cannot be empty!"
+            );
         }
 
         return productDAO.searchProducts(keyword.trim());
     }
 
-    // Filter products by category
+    // Public: Filter products by category.
     public List<Product> getProductsByCategory(int categoryId) {
 
         if (categoryId <= 0) {
@@ -174,55 +289,64 @@ public class ProductService {
         return productDAO.getProductsByCategory(categoryId);
     }
 
-    // Sort products by price
+    // Public: Sort products by price.
     public List<Product> sortProductsByPrice(String order) {
 
-        if (order == null ||
-                (!order.equalsIgnoreCase("ASC") &&
-                        !order.equalsIgnoreCase("DESC"))) {
+        if (order == null
+                || (!order.equalsIgnoreCase("ASC")
+                && !order.equalsIgnoreCase("DESC"))) {
+
             throw new IllegalArgumentException(
-                    "Order must be ASC or DESC!");
+                    "Sort order must be ASC or DESC!"
+            );
         }
 
         return productDAO.sortProductsByPrice(order);
     }
 
-    // Validate product details
+    // Validate product details.
     private void validateProduct(Product product) {
 
         if (product == null) {
-            throw new IllegalArgumentException("Product cannot be null!");
+            throw new IllegalArgumentException(
+                    "Product cannot be null!"
+            );
         }
 
-        if (product.getProductName() == null ||
-                product.getProductName().trim().isEmpty()) {
+        if (product.getProductName() == null
+                || product.getProductName().trim().isEmpty()) {
+
             throw new IllegalArgumentException(
-                    "Product name cannot be empty!");
+                    "Product name is required!"
+            );
         }
 
         if (product.getProductName().trim().length() > 150) {
             throw new IllegalArgumentException(
-                    "Product name cannot exceed 150 characters!");
+                    "Product name cannot exceed 150 characters!"
+            );
         }
 
         if (product.getCategoryId() <= 0) {
-            throw new IllegalArgumentException("Invalid category ID!");
-        }
-
-        if (product.getPrice() == null ||
-                product.getPrice().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException(
-                    "Product price must be greater than zero!");
+                    "Valid category is required!"
+            );
         }
 
-        if (product.getPrice().compareTo(
-                new BigDecimal("99999999.99")) > 0) {
-            throw new IllegalArgumentException("Product price is too high!");
+        if (product.getPrice() == null
+                || product.getPrice().compareTo(BigDecimal.ZERO) <= 0
+                || product.getPrice().compareTo(
+                        new BigDecimal("99999999.99")) > 0) {
+
+            throw new IllegalArgumentException(
+                    "Product price must be greater than zero!"
+            );
         }
 
         if (product.getStock() < 0) {
             throw new IllegalArgumentException(
-                    "Product stock cannot be negative!");
+                    "Product stock cannot be negative!"
+            );
         }
     }
 }
