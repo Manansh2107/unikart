@@ -2,6 +2,7 @@
 package com.unikart;
 
 import com.unikart.admin.AdminMenu;
+import com.unikart.customer.CustomerMenu;
 import com.unikart.user.AuthService;
 import com.unikart.user.User;
 
@@ -82,7 +83,6 @@ public class App {
             System.out.println("\nLogin successful!");
             System.out.println("Welcome, " + user.getName());
 
-            // Redirect user according to their role.
             switch (user.getRole()) {
 
                 case ADMIN:
@@ -108,9 +108,13 @@ public class App {
                 case CUSTOMER:
 
                     System.out.println("Role: CUSTOMER");
-                    System.out.println(
-                            "Customer Panel will be connected next."
+
+                    CustomerMenu customerMenu = new CustomerMenu(
+                            user,
+                            scanner
                     );
+
+                    customerMenu.showMenu();
                     break;
 
                 default:
