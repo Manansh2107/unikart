@@ -1,8 +1,8 @@
-
 package com.unikart;
 
 import com.unikart.admin.AdminMenu;
 import com.unikart.customer.CustomerMenu;
+import com.unikart.seller.SellerMenu;
 import com.unikart.user.AuthService;
 import com.unikart.user.User;
 
@@ -69,8 +69,7 @@ public class App {
 
             Optional<User> userOptional = authService.login(
                     email,
-                    password
-            );
+                    password);
 
             if (userOptional.isEmpty()) {
 
@@ -91,8 +90,7 @@ public class App {
 
                     AdminMenu adminMenu = new AdminMenu(
                             user,
-                            scanner
-                    );
+                            scanner);
 
                     adminMenu.showMenu();
                     break;
@@ -100,9 +98,12 @@ public class App {
                 case SELLER:
 
                     System.out.println("Role: SELLER");
-                    System.out.println(
-                            "Seller Panel will be connected next."
-                    );
+
+                    SellerMenu sellerMenu = new SellerMenu(
+                            user,
+                            scanner);
+
+                    sellerMenu.showMenu();
                     break;
 
                 case CUSTOMER:
@@ -111,8 +112,7 @@ public class App {
 
                     CustomerMenu customerMenu = new CustomerMenu(
                             user,
-                            scanner
-                    );
+                            scanner);
 
                     customerMenu.showMenu();
                     break;
@@ -125,14 +125,12 @@ public class App {
         } catch (SQLException e) {
 
             System.out.println(
-                    "\nDatabase error during login: " + e.getMessage()
-            );
+                    "\nDatabase error during login: " + e.getMessage());
 
         } catch (Exception e) {
 
             System.out.println(
-                    "\nSomething went wrong: " + e.getMessage()
-            );
+                    "\nSomething went wrong: " + e.getMessage());
         }
     }
 
@@ -160,8 +158,7 @@ public class App {
                     name,
                     email,
                     password,
-                    phone
-            );
+                    phone);
 
             System.out.println("\nRegistration successful!");
             System.out.println("Welcome to Unikart, " + registeredUser.getName());
@@ -176,14 +173,12 @@ public class App {
         } catch (SQLException e) {
 
             System.out.println(
-                    "\nDatabase error during registration: " + e.getMessage()
-            );
+                    "\nDatabase error during registration: " + e.getMessage());
 
         } catch (Exception e) {
 
             System.out.println(
-                    "\nSomething went wrong: " + e.getMessage()
-            );
+                    "\nSomething went wrong: " + e.getMessage());
         }
     }
 }
