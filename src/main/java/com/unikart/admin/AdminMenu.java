@@ -6,6 +6,8 @@ import com.unikart.product.CategoryDAO;
 import com.unikart.product.Product;
 import com.unikart.product.ProductDAO;
 import com.unikart.service.ProductService;
+import com.unikart.user.SellerApplication;
+import com.unikart.user.SellerService;
 import com.unikart.user.User;
 
 import java.math.BigDecimal;
@@ -19,6 +21,7 @@ public class AdminMenu {
     private final ProductService productService;
     private final CategoryDAO categoryDAO;
     private final ProductDAO productDAO;
+    private final SellerService sellerService;
 
     public AdminMenu(User admin, Scanner scanner) {
         this.admin = admin;
@@ -26,11 +29,17 @@ public class AdminMenu {
         this.productService = new ProductService();
         this.categoryDAO = new CategoryDAO();
         this.productDAO = new ProductDAO();
+        this.sellerService = new SellerService();
     }
 
     // MAIN ADMIN MENU
 
     public void showMenu() {
+
+        if (admin == null || admin.getRole() != User.Role.ADMIN) {
+            System.out.println("Access denied! Admin privileges required.");
+            return;
+        }
 
         while (true) {
 
@@ -47,7 +56,10 @@ public class AdminMenu {
             System.out.println("6. Approve Product");
             System.out.println("7. Reject Product");
             System.out.println("8. View Rejected Products");
-            System.out.println("9. Logout");
+            System.out.println("9. View Pending Seller Applications");
+            System.out.println("10. Approve Seller Application");
+            System.out.println("11. Reject Seller Application");
+            System.out.println("12. Logout");
             System.out.println("------------------------------------");
             System.out.print("Enter your choice: ");
 
@@ -88,6 +100,18 @@ public class AdminMenu {
                     break;
 
                 case "9":
+                    viewPendingSellerApplications();
+                    break;
+
+                case "10":
+                    approveSellerApplication();
+                    break;
+
+                case "11":
+                    rejectSellerApplication();
+                    break;
+
+                case "12":
                     System.out.println("\nAdmin logged out successfully.");
                     return;
 
@@ -482,6 +506,150 @@ public class AdminMenu {
         } catch (Exception e) {
             System.out.println(
                     "Unable to fetch rejected products: " + e.getMessage()
+            );
+        }
+    }
+
+    // VIEW PENDING SELLER APPLICATIONS
+
+    private void viewPendingSellerApplications() {
+
+        System.out.println("\n========== PENDING SELLER APPLICATIONS ==========");
+
+        try {
+
+            List<SellerApplication> applications =
+                    sellerService.getPendingApplications(admin);
+
+            if (applications == null || applications.isEmpty()) {
+                System.out.println("No pending seller applications found.");
+                return;
+            }
+
+            for (SellerApplication application : applications) {
+
+                System.out.println("------------------------------------");
+                System.out.println(
+                        "Application ID: " + application.getApplicationId()
+                );
+                System.out.println("User ID: " + application.getUserId());
+                System.out.println(
+                        "College: " + application.getCollegeName()
+                );
+                System.out.println(
+                        "Reason: " + application.getReason()
+                );
+                System.out.println(
+                        "Applied At: " + application.getAppliedAt()
+                );
+                System.out.println("Status: " + application.getStatus());
+            }
+
+            System.out.println("------------------------------------");
+            System.out.println(
+                    "Total Pending Applications: " + applications.size()
+            );
+
+        } catch (Exception e) {
+            System.out.println(
+                    "Unable to fetch seller applications: " + e.getMessage()
+            );
+        }
+    }
+
+    // APPROVE SELLER APPLICATION
+
+    private void approveSellerApplication() {
+
+        System.out.println("\n========== APPROVE SELLER APPLICATION ==========");
+
+        try {
+
+            System.out.print("Enter Application ID to approve: ");
+            int applicationId = Integer.parseInt(
+                    scanner.nextLine().trim()
+            );
+
+            System.out.print(
+                    "Are you sure you want to approve this application? (Y/N): "
+            );
+
+            String confirmation = scanner.nextLine().trim();
+
+            if (!confirmation.equalsIgnoreCase("Y")) {
+                System.out.println("Application approval cancelled.");
+                return;
+            }
+
+            boolean approved = sellerService.approveApplication(
+                    admin,
+                    applicationId
+            );
+
+            if (approved) {
+                System.out.println("\nSeller application approved successfully!");
+                System.out.println("The customer is now a SELLER.");
+            } else {
+                System.out.println(
+                        "\nApplication could not be approved. "
+                                + "Check whether it exists and is PENDING."
+                );
+            }
+
+        } catch (NumberFormatException e) {
+            System.out.println("Invalid Application ID.");
+
+        } catch (Exception e) {
+            System.out.println(
+                    "Error approving seller application: " + e.getMessage()
+            );
+        }
+    }
+
+    // REJECT SELLER APPLICATION
+
+    private void rejectSellerApplication() {
+
+        System.out.println("\n========== REJECT SELLER APPLICATION ==========");
+
+        try {
+
+            System.out.print("Enter Application ID to reject: ");
+            int applicationId = Integer.parseInt(
+                    scanner.nextLine().trim()
+            );
+
+            System.out.print("Enter Reason for Rejection: ");
+            String reason = scanner.nextLine().trim();
+
+            if (reason.isEmpty()) {
+                System.out.println("Rejection reason cannot be empty.");
+                return;
+            }
+
+            boolean rejected = sellerService.rejectApplication(
+                    admin,
+                    applicationId,
+                    reason
+            );
+
+            if (rejected) {
+                System.out.println("\nSeller application rejected successfully!");
+                System.out.println("Status: REJECTED");
+                System.out.println("Reason: " + reason);
+            } else {
+                System.out.println(
+                        "\nApplication could not be rejected. "
+                                + "Check whether it exists and is PENDING."
+                );
+            }
+
+        } catch (NumberFormatException e) {
+            System.out.println("Invalid Application ID.");
+
+        } catch (Exception e) {
+            System.out.println(
+                    "Error rejecting seller application: " + e.getMessage()
             );
         }
     }

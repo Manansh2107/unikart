@@ -12,8 +12,10 @@ import com.unikart.product.Category;
 import com.unikart.product.CategoryDAO;
 import com.unikart.product.Product;
 import com.unikart.service.ProductService;
+import com.unikart.user.SellerService;
 import com.unikart.user.User;
 
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Scanner;
 
@@ -27,6 +29,7 @@ public class CustomerMenu {
     private final CartService cartService = new CartService();
     private final OrderService orderService = new OrderService();
     private final PaymentDAO paymentDAO = new PaymentDAO();
+    private final SellerService sellerService = new SellerService();
 
     public CustomerMenu(User customer, Scanner scanner) {
         this.customer = customer;
@@ -60,7 +63,8 @@ public class CustomerMenu {
             System.out.println("9. Checkout");
             System.out.println("10. Order History");
             System.out.println("11. View Payment Details");
-            System.out.println("12. Logout");
+            System.out.println("12. Apply for Seller Account");
+            System.out.println("13. Logout");
             System.out.println("================================");
 
             int choice = readInt("Enter your choice: ");
@@ -113,6 +117,10 @@ public class CustomerMenu {
                         break;
 
                     case 12:
+                        applyForSellerAccount();
+                        break;
+
+                    case 13:
                         running = false;
                         System.out.println("Logged out successfully!");
                         break;
@@ -425,6 +433,36 @@ public class CustomerMenu {
                 "Transaction Reference: "
                         + payment.getTransactionReference());
         System.out.println("Date: " + payment.getCreatedAt());
+    }
+
+    private void applyForSellerAccount() throws SQLException {
+
+        System.out.println("\n========== SELLER APPLICATION ==========");
+
+        System.out.println(
+                "Apply to become a seller on Unikart.");
+
+        System.out.print("Enter your college name: ");
+        String collegeName = scanner.nextLine().trim();
+
+        if (collegeName.isEmpty()) {
+            System.out.println("College name is required!");
+            return;
+        }
+
+        System.out.print("Why do you want to become a seller? ");
+        String reason = scanner.nextLine().trim();
+
+        int applicationId = sellerService.applyForSeller(
+                customer,
+                collegeName,
+                reason
+        );
+
+        System.out.println("\nSeller application submitted successfully!");
+        System.out.println("Application ID: " + applicationId);
+        System.out.println("Status: PENDING");
+        System.out.println("An admin will review your application.");
     }
 
     private int readInt(String message) {
