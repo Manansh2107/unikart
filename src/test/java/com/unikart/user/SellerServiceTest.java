@@ -1,3 +1,8 @@
+/*
+ * Developers: MANANSH GOYAL, Shreyansh
+ * Development Dates: 17-11-2026, 18-11-2026
+ */
+
 package com.unikart.user;
 
 import java.sql.SQLException;

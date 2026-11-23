@@ -1,4 +1,7 @@
-
+/*
+ * Developer: MANANSH GOYAL
+ * Development Date: 18-11-2026
+ */
 package com.unikart.user;
 
 import com.unikart.database.DBConnection;
@@ -11,12 +14,6 @@ import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Locale;
 
-/*
- * Project Name: Unikart
- * Developer Name: Manansh
- * Development Date: 18 November 2026
- * Module: Initial Admin Account Setup
- */
 
 public class AdminSetupService {
 
